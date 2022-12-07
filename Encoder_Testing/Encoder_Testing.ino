@@ -107,6 +107,14 @@ const int wheelDiam = 8.6;    // Wheel diameter on robot (cm)
 const int wheelCirc = wheelDiam*PI;    // Wheel circumfrence on robot (cm)
 const int robotDiam = 21;   // Robot Diameter from center to center of the wheels (cm)
 
+// define motor velocity 
+volatile float veloLeft;
+volatile float veloRight;
+
+// define motor error
+volatile float errorLeft;
+volatile float errorRight;
+
 //IMU object
 Adafruit_MPU6050 mpu;
 
@@ -269,6 +277,7 @@ void reset_encoder_data() {
 }
 
 void update_encoder_data(){
+
     lastSpeed[LEFT] = encoder[LEFT];                        //record the latest left speed value
     lastSpeed[RIGHT] = encoder[RIGHT];                      //record the latest right speed value
     accumTicks[LEFT] = accumTicks[LEFT] + encoder[LEFT];    //record accumulated left ticks
@@ -602,24 +611,48 @@ void forward(int distance) {
   // Calculates the distance in cm to wheel steps  (800  steps per rotation)
   int wheelStepsForDistance = (800 / wheelCirc) * distance; // (steps per rotation / distance per rotation) * desired distance
 
+  // Calculates the distance in encoder ticks for both motors
+  int desiredEncoderBoth = (40 / wheelCirc) * distance;
+  Serial.println(desiredEncoderBoth);
   
+  while(1){
+    update_encoder_data();
+    Serial.println("Encoder value:");
+    Serial.print("\tLeft:\t");
+    Serial.print(encoder[LEFT]);
+    Serial.print("\tRight:\t");
+    Serial.println(encoder[RIGHT]);
+    Serial.println("Accumulated Ticks: ");
+    Serial.print("\tLeft:\t");
+    Serial.print(accumTicks[LEFT]);
+    Serial.print("\tRight:\t");
+    Serial.println(accumTicks[RIGHT]);
 
-  
-/*
-  // Moves both motors to desired distance
-  long positions[2]; // Array of desired stepper positions
-  positions[0] = wheelStepsForDistance;//right motor absolute position
-  positions[1] = wheelStepsForDistance;//left motor absolute position
-  steppers.moveTo(positions);
-  steppers.runSpeedToPosition(); // Blocks until all are in position
-*/
-  stepperRight.moveTo(wheelStepsForDistance);
-  stepperLeft.moveTo(wheelStepsForDistance);
-  stepperRight.setMaxSpeed(500);//set right motor speed
-  stepperLeft.setMaxSpeed(500);//set left motor speed
-  stepperRight.runSpeedToPosition();//move right motor
-  stepperLeft.runSpeedToPosition();//move left motor
-  runToStop();//run until the robot reaches the target
+    
+    errorLeft = accumTicks[LEFT]/desiredEncoderBoth;
+    errorRight = accumTicks[RIGHT]/desiredEncoderBoth;
+
+    if ((errorLeft == 1) && (errorRight == 1)){
+      veloLeft = 0;
+      veloRight = 0;
+      break;
+    }
+
+    veloLeft = 1000*(1 - (errorLeft));
+    veloRight = 1000*(1 - (errorRight));
+
+    stepperRight.setAcceleration(veloRight);
+    stepperLeft.setAcceleration(veloLeft);
+    runAtSpeed();
+
+    stepperRight.moveTo(wheelStepsForDistance);
+    stepperLeft.moveTo(wheelStepsForDistance);
+
+    stepperRight.runSpeedToPosition();//move right motor
+    stepperLeft.runSpeedToPosition();//move left motor
+  }
+
+
 
 }
 /*
@@ -674,8 +707,8 @@ void moveCircle(int diam, int dir) {
 
   float circleFactor = innerTicks / outterTicks;
 
-  float rightSpeed = outterTicks / 20;
-  float leftSpeed = innerTicks / 20;
+  float rightSpeed = 500;
+  float leftSpeed = circleFactor * 500;
   
   if (dir == 0){
     stepperRight.moveTo(outterTicks);
@@ -686,8 +719,6 @@ void moveCircle(int diam, int dir) {
     stepperLeft.runSpeedToPosition();//move left motor
     runToStop();//run until the robot reaches the target
   }
-
-  
 }
 
 /*
@@ -728,23 +759,11 @@ void setup()
 
 void loop()
 {
-  forward(30);
-  delay(1000);
-  reverse(30);
-  delay(1000);
-  pivot(0);
-  delay(1000);
-  pivot(1);
-  delay(1000);
-  spin(1);
-  delay(1000);
-  spin(0);
-  delay(1000);
-  turn(1);
-  delay(1000);
-  turn(0);
 
-  stop();
+  moveCircle(50, 0);
+
+  
+
 
   //uncomment each function one at a time to see what the code does
   //move1();//call move back and forth function
